@@ -116,22 +116,49 @@ foreach my $pair (@data){
   }
 }
 
-foreach my $name1 (keys %$e){
-  foreach my $name2 (keys %{$e->{$name1}}){
-    foreach my $other (keys %{$e->{$name2}}){
-      $e->{$name1}->{$other}++;
+
+foreach my $name (keys %$e){
+  #List of see families
+  my $list = { $name => 1};
+  my $seen = 1;
+  while($seen == 1){
+    my $cnt = scalar(keys %{$list});
+    foreach my $p1 (keys %{$list}){
+      foreach my $p2 (keys %{$e->{$p1}}){
+        $e->{$p1}->{$p2} = 1;
+        $e->{$p2}->{$p1} = 1;
+        $list->{$p2}++;
+      }
     }
-    $e->{$name2}->{$name1}++;
+    my $newCnt = scalar(keys %{$list});
+    if($cnt == $newCnt){
+      $seen = 0;
+      foreach my $p1 (keys %{$list}){
+        foreach my $p2 (keys %{$list}){
+          next if ($p1 eq $p2);
+          $e->{$p1}->{$p2} = 1;
+          $e->{$p2}->{$p1} = 1;
+        }
+      }
+      last;
+    }
   }
 }
 
 foreach my $pair (@data){
   if(defined($e->{$pair->[0]})){
-    my $newname = join("=", sort{ $a cmp $b }keys( %{$e->{$pair->[0]}}));
+    my @names;
+    push(@names, $pair->[0]);
+    push(@names, keys(%{$e->{$pair->[0]}}));
+    my $newname = join("=", sort{ $a cmp $b }@names);
     $pair->[0] = $newname;
+
   }
   if(defined($e->{$pair->[1]})){
-    my $newname = join("=", sort{ $a cmp $b }keys( %{$e->{$pair->[1]}}));
+    my @names;
+    push(@names, $pair->[1]);
+    push(@names, keys(%{$e->{$pair->[1]}}));
+    my $newname = join("=", sort{ $a cmp $b }@names);
     $pair->[1] = $newname;
   }
   
@@ -150,29 +177,37 @@ foreach my $pair (@data){
 }
 
 #Now reduce to bare minimal nodes.
-use DDP;
 my %seen;
-#p(@data);
-#p($bestJaccard);
-#exit;
 my @redData;
 foreach my $pair (@data){
   next if($pair->[0] eq $pair->[1]);
   if(defined($bestJaccard->{$pair->[1]})){
-    unless($seen{ $pair->[1]}){
-      if( $bestJaccard->{ $pair->[1]} == $pair->[3] ){
+    unless($seen{ $pair->[1] }){
+      if( $bestJaccard->{ $pair->[1] } == $pair->[3] ){
         push(@redData, $pair);
-        $seen{ $pair->[1]}++;
+        $seen{ $pair->[1] }++;
       }
     }
   }else{
-    p($pair);
     die;
   }
 }
 
-#p(@redData);
-#exit;
+foreach my $mPair(@redData){
+  next if($mPair->[0] eq $mPair->[1]);
+  if(!$seen{ $mPair->[0] }){
+    $seen{ $mPair->[0] }++;
+  }  
+}
+
+foreach my $mPair (@data){
+  next if($mPair->[0] eq $mPair->[1]);
+  if(!$seen{ $mPair->[0] }){
+    $seen{ $mPair->[0] }++;
+    $mPair->[0] .= "-splice-";
+    push(@redData, $mPair);
+  }
+}
 
 # Find children
 my %children;
@@ -242,6 +277,7 @@ open(OUT,">$outfile-JI-$ithreshold-JC-$cthreshold") || die "Unable to write to $
 
 # Read in lines until line does not start with a tab
 $line = <IN>;
+chomp($line);
 my $text = $line."*";
 while ($line = <IN>) {
       chomp($line);
